@@ -1,0 +1,10 @@
+name: remote-ml-template
+channels:
+ - pytorch
+dependencies:
+  - python=3.6
+  - pip
+  - magma-cuda100
+  - pip:
+    - torch
+    - ipython
