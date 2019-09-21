@@ -14,7 +14,8 @@ On Local:
 * OpenSSH >= 6.7
 * docker, docker-compose
 * [mutagen](mutagen.io)
-Remote:
+
+On Remote:
 * OpenSSH >= 6.7
 * dockerd
 
