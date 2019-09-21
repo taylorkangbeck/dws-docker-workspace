@@ -1,4 +1,4 @@
-name: remote-ml-template
+name: dws-example-project
 channels:
  - pytorch
 dependencies:

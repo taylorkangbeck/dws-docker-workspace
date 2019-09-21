@@ -1,0 +1,114 @@
+#!/bin/bash
+
+# Usage: source dws-attach {attach|detach} [remote_host]
+# Defaults to local docker if no remote host is provided
+# Remote host should be configured in ~/.ssh/config
+# If you change from local to remote, the remote container will continue running (and vice-versa)
+
+is_running () {
+    docker-compose -H=$DOCKER_HOST exec $docker_service_name echo 'Still running!'
+}
+
+attach_container () {
+    echo 'Attaching to container...'
+    docker-compose -H=$DOCKER_HOST exec $docker_service_name /bin/bash
+}
+
+start_container () {
+    echo 'Rebuilding image and starting container...'
+    docker-compose -H=$DOCKER_HOST down
+    docker-compose -H=$DOCKER_HOST up --build --detach
+}
+
+start_sync () {
+    container=$(docker-compose -H=$DOCKER_HOST ps -q $docker_service_name)
+    mutagen sync create --name=$mutagen_project_name $(pwd) docker://$container/~/$docker_service_name  # maybe get dirname instead?
+}
+
+connect () {
+    if is_running ; then
+        start_sync
+        attach_container
+    else
+        start_container
+        start_sync
+        attach_container
+    fi
+}
+
+kill_tunnel () {
+    # kill the socket-forwarding process if active
+    [ -f "$ssh_pidfile" ] && kill -9 $(cat $ssh_pidfile) && rm $ssh_pidfile
+    # remove local socket file if exists
+    [ -S "$local_sock" ] && rm $local_sock
+}
+
+tunnel_remote () {
+    # docker-compose doesn't support ~/.ssh/config, so we tunnel to the socket ourselves
+    # start docker daemon on remote host
+    ssh $remote_host 'sudo usermod -aG docker $USER && sudo dockerd &'
+    # forward the docker daemon's unix socket and point local to it
+    ssh -nNT -L $local_sock:/var/run/docker.sock $remote_host &
+    echo $! > $ssh_pidfile
+    export DOCKER_HOST=unix://$local_sock
+}
+
+attach_main () {
+    detach_main
+    # Attaching
+    if ! [ -z "$remote_host" ]; then
+        echo "Connecting to remote docker daemon on $remote_host..."
+        tunnel_remote
+        connect
+    else
+        echo "Connecting to local Docker daemon..."
+        unset DOCKER_HOST
+        connect
+    fi
+}
+
+detach_main() {
+    echo 'Detaching from previous docker workspace...'
+    mutagen sync terminate $mutagen_project_name
+    kill_tunnel
+    unset DOCKER_HOST
+    echo 'Detached from previous docker workspace.'
+}
+
+stop_main() {
+    echo 'Stopping docker workspace...'
+    mutagen sync terminate $mutagen_project_name
+    docker-compose -H=$DOCKER_HOST down
+    kill_tunnel
+    unset DOCKER_HOST
+}
+
+if [ $# -lt 1 ]; then
+    echo 'Usage: '
+    echo '  dws attach [ssh_host]'
+    echo '  dws detach'
+    echo '  dws stop'
+elif [ ! -f docker-compose.yml ]; then
+    echo 'ERROR: Are you in the correct directory? Project root must have docker-compose.yml!'
+else
+    remote_host=; [ -z "$2" ] || remote_host=$2
+
+    docker_service_name=$(grep -A3 'services:' docker-compose.yml | head -2 | tail -1 | cut -d : -f 1 | awk '{print $1}')
+    # mutagen doesn't accept dashes, underscores
+    mutagen_project_name=$(echo "$docker_service_name" | sed "s/[^[:alnum:]]//g") 
+
+    files_root=/usr/local/var/dws
+    mkdir -p $files_root
+    ssh_pidfile=$files_root/ssh.pid
+    local_sock=$files_root/docker.sock
+
+    if [ "$1" = "attach" ]; then
+        attach_main
+    elif [ "$1" = "detach" ]; then
+        detach_main
+    elif [ "$1" = "stop" ]; then
+        stop_main
+    else
+        echo "ERROR: Invalid option: $1"
+    fi
+fi
