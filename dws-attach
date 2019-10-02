@@ -17,7 +17,7 @@ attach_container () {
 start_container () {
     echo 'Rebuilding image and starting container...'
     docker-compose -H=$DOCKER_HOST down
-    docker-compose -H=$DOCKER_HOST up --build --detach
+    docker-compose --verbose -H=$DOCKER_HOST up --build --detach
 }
 
 start_sync () {
