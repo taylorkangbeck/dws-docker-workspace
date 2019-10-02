@@ -45,8 +45,8 @@ kill_tunnel () {
 
 tunnel_remote () {
     # docker-compose doesn't support ~/.ssh/config, so we tunnel to the socket ourselves
-    # start docker daemon on remote host
-    ssh $remote_host 'sudo usermod -aG docker $USER && sudo dockerd &'
+    # start docker daemon on remote host. TODO: allow external configuration. shm-size is for nvidia specifically...
+    ssh $remote_host 'sudo usermod -aG docker $USER && sudo dockerd --default-shm-size=1G --storage-driver=overlay2 &'
     # forward the docker daemon's unix socket and point local to it
     ssh -nNT -L $local_sock:/var/run/docker.sock $remote_host &
     echo $! > $ssh_pidfile

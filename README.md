@@ -83,3 +83,6 @@ TODO: automatically provision a host through a configured cloud provider
   * If you're connecting to a remote server, this error is misleading. It's actually having trouble connecting to the ssh-tunneled docker.sock file. Try deleting it from /usr/local/var/dws/docker.sock and rerunning dws attach
 * ERROR: Cannot start service: driver failed programming external connectivity on endpoint: Bind for 0.0.0.0:8888 failed: port is already allocated
   * You already have a container that is bound to that local port (eg 8888). You either need to change your docker-compose.yml or stop the other container manually. Make sure you stop containers before changing your docker-compose.yml
+* Hangs after "Building <project>..."
+  * If your docker daemon was already running before using dws, it may be listening to an unexpected socket.
+    * You can check this with `ps aux | grep dockerd` and see whether dockerd was run with the --host/-H arg set. If so, kill the daemon and rerun dws attach
