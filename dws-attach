@@ -22,7 +22,7 @@ start_container () {
 
 start_sync () {
     container=$(docker-compose -H=$DOCKER_HOST ps -q $docker_service_name)
-    mutagen sync create --name=$mutagen_project_name $(pwd) docker://$container/~/$docker_service_name  # maybe get dirname instead?
+    mutagen sync create --name=$mutagen_project_name $(pwd) docker://$container/~/src/$docker_service_name  # maybe get dirname instead?
 }
 
 connect () {

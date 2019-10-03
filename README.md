@@ -14,6 +14,8 @@ On Local:
 * OpenSSH >= 6.7
 * docker, docker-compose
 * [mutagen](mutagen.io)
+* yq
+  * `brew install yq`
 Remote:
 * OpenSSH >= 6.7
 * dockerd
@@ -84,5 +86,5 @@ TODO: automatically provision a host through a configured cloud provider
 * ERROR: Cannot start service: driver failed programming external connectivity on endpoint: Bind for 0.0.0.0:8888 failed: port is already allocated
   * You already have a container that is bound to that local port (eg 8888). You either need to change your docker-compose.yml or stop the other container manually. Make sure you stop containers before changing your docker-compose.yml
 * Hangs after "Building <project>..."
-  * If your docker daemon was already running before using dws, it may be listening to an unexpected socket.
-    * You can check this with `ps aux | grep dockerd` and see whether dockerd was run with the --host/-H arg set. If so, kill the daemon and rerun dws attach
+  * It may just be taking a while to upload large files. How big is your Docker build context? Do you have any large files? They could be in a hidden folder like .git
+  * Delete unnecessary files, or add them to a `.dockerignore` in the project root
