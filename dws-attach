@@ -6,7 +6,7 @@
 # If you change from local to remote, the remote container will continue running (and vice-versa)
 
 is_running () {
-    docker-compose -H=$DOCKER_HOST exec $docker_service_name echo 'Still running!'
+    docker-compose -H=$DOCKER_HOST exec $docker_service_name echo 'Container still running!' &>/dev/null
 }
 
 attach_container () {
@@ -15,9 +15,9 @@ attach_container () {
 }
 
 start_container () {
-    echo 'Rebuilding image and starting container...'
+    echo 'Starting container...'
     docker-compose -H=$DOCKER_HOST down
-    docker-compose -H=$DOCKER_HOST up --build --detach
+    docker-compose -H=$DOCKER_HOST up --detach $up_build_arg
 }
 
 start_sync () {
@@ -40,10 +40,10 @@ start_sync () {
 }
 
 stop_sync () {
-    mutagen project terminate
+    mutagen project terminate &>/dev/null
 }
 
-connect () {
+attach_with_sync () {
     if is_running ; then
         start_sync && attach_container
     else
@@ -53,11 +53,12 @@ connect () {
 
 kill_tunnel () {
     # kill the socket-forwarding process if active
-    [ -f "$ssh_pidfile" ] && kill -9 $(cat $ssh_pidfile) && rm $ssh_pidfile
+    [ -f "$ssh_pidfile" ] && (kill -9 $(cat $ssh_pidfile); rm $ssh_pidfile)
     # remove local socket file if exists
     [ -S "$local_sock" ] && rm $local_sock
     # remove dws files root if exists
     [ -d "$files_root" ] && rmdir $files_root
+    unset DOCKER_HOST
 }
 
 tunnel_remote () {
@@ -68,16 +69,17 @@ tunnel_remote () {
     local_sock=$files_root/docker.sock
 
     # start docker daemon on remote host. TODO: allow external configuration. shm-size is for nvidia specifically...
-    ssh $remote_host 'sudo usermod -aG docker $USER && sudo dockerd --default-shm-size=1G --storage-driver=overlay2 &'
+    ssh $remote_host 'sudo usermod -aG docker $USER && sudo dockerd --default-shm-size=1G --storage-driver=overlay2 &' &>/dev/null
 
     # forward the docker daemon's unix socket and point local to it
     ssh -nNT -L $local_sock:/var/run/docker.sock $remote_host &
     echo $! > $ssh_pidfile
+    while [ ! -S "$local_sock" ]; do sleep 0.1; done  # Wait for socket to be created
     export DOCKER_HOST=unix://$local_sock
 }
 
-attach_main () {
-    detach_main
+connect () {
+    detach
     # Attaching
     if ! [ -z "$remote_host" ]; then
         echo "Connecting to remote docker daemon on $remote_host..."
@@ -86,23 +88,36 @@ attach_main () {
         echo "Connecting to local Docker daemon..."
         unset DOCKER_HOST
     fi
-    connect; detach_main  # auto detach after closing terminal
 }
 
-detach_main() {
+detach() {
     echo 'Detaching from previous docker workspace...'
     stop_sync
     kill_tunnel
-    unset DOCKER_HOST
-    echo 'Detached from previous docker workspace.'
 }
 
-stop_main() {
+stop() {
     echo 'Stopping docker workspace...'
     stop_sync
     docker-compose -H=$DOCKER_HOST down
+}
+
+attach_main() {
+    connect
+    attach_with_sync; detach  # auto detach after closing terminal
+}
+
+stop_main() {
+    connect
+    stop
     kill_tunnel
-    unset DOCKER_HOST
+}
+
+rebuild_main() {
+    up_build_arg="--build"
+    connect
+    stop
+    attach_with_sync; detach 
 }
 
 # Main
@@ -110,8 +125,13 @@ stop_main() {
 if [ $# -lt 1 ]; then
     echo 'Usage: '
     echo '  dws attach [ssh_host]'
+    echo "  > Attaches terminal to running container, starting a new one if it doesn't exist."
+    echo '  dws stop [ssh_host]'
+    echo "  > Stops the associated container if it's running."
+    echo '  dws rebuild [ssh_host]'
+    echo "  > Forces docker to rebuild the image, then starts a container and attaches to it."
     echo '  dws detach'
-    echo '  dws stop'
+    echo "  > Cleanly detaches from the previous workspace. Good for resetting state when an attach command is interrupted."
     return 128
 fi
 
@@ -120,13 +140,16 @@ if [ ! "$?" = 0 ]; then return 1; fi
 
 remote_host=; [ -z "$2" ] || remote_host=$2
 docker_service_name=$(grep -A3 'services:' docker-compose.yml | head -2 | tail -1 | cut -d : -f 1 | awk '{print $1}')
+up_build_arg=''
 
 if [ "$1" = "attach" ]; then
     attach_main
-elif [ "$1" = "detach" ]; then
-    detach_main
 elif [ "$1" = "stop" ]; then
     stop_main
+elif [ "$1" = "rebuild" ]; then
+    rebuild_main
+elif [ "$1" = "detach" ]; then
+    detach
 else
     echo "ERROR: Invalid option: $1"
 fi
