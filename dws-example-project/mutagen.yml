@@ -4,7 +4,7 @@ sync:
     mode: "one-way-safe"
   dwsExampleProject:  # only supports one project. no non-alphanumeric chars
    alpha: "."
-   beta: "docker://08dd647e6226ec16455d7ccf9bbbcc0a96753ae533d2aac5b66ffe05ee5fe418/~/dws-example-project"
+   beta: "docker://5502997e0966a50b8030197d67ef916e96bef6c0c6bb1608854193434a0e55d1/~/dws-example-project"
    maxStagingFileSize: "1 GB"
    configurationBeta:
      stageMode: "neighboring"

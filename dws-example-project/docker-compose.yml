@@ -1,7 +1,7 @@
 version: '3'
 services:
     dws-example-project:  # Will always attach to first service defined
-        image: dws-example-project: latest
+        image: dws-example-project:latest
         build: .
         ports:
             - "8888:8888"  # jupyter default
@@ -13,5 +13,3 @@ services:
           - homevolume:/root/
 volumes:
     homevolume: {}
-
-

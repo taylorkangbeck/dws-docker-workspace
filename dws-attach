@@ -17,32 +17,37 @@ attach_container () {
 start_container () {
     echo 'Rebuilding image and starting container...'
     docker-compose -H=$DOCKER_HOST down
-    docker-compose --verbose -H=$DOCKER_HOST up --build --detach
+    docker-compose -H=$DOCKER_HOST up --build --detach
 }
 
 start_sync () {
     # Get container from docker-compose
     cur_container=$(docker-compose -H=$DOCKER_HOST ps -q $docker_service_name)
+    if [ -z "$cur_container" ]; then
+        echo "ERROR: Tried starting a file sync but could not find running container."
+        return 1
+    fi
     # Parsing current container id from mutagen.yml
     prev_mutagen_container=$(yq d mutagen.yml sync.defaults | yq r - "sync.*.*" | grep docker:// | yq r - "[0]" | awk -F"//" '{print $2}' | awk -F"/" '{print $1}')
     # Writing new container id to mutagen.yml. Note: this replaces all occurences of previous container id
     if [ -z "$prev_mutagen_container" ]; then
         echo "ERROR: mutagen.yml file docker:// definition invalid. Must at least have placeholder for container id."
-        exit 1
+        return 1
     fi
 
     sed -i '' "s/$prev_mutagen_container/$cur_container/g" mutagen.yml  # be careful... not sanitizing input
     mutagen project start
 }
 
+stop_sync () {
+    mutagen project terminate
+}
+
 connect () {
     if is_running ; then
-        start_sync
-        attach_container
+        start_sync && attach_container
     else
-        start_container
-        start_sync
-        attach_container
+        start_container && start_sync && attach_container
     fi
 }
 
@@ -51,12 +56,20 @@ kill_tunnel () {
     [ -f "$ssh_pidfile" ] && kill -9 $(cat $ssh_pidfile) && rm $ssh_pidfile
     # remove local socket file if exists
     [ -S "$local_sock" ] && rm $local_sock
+    # remove dws files root if exists
+    [ -d "$files_root" ] && rmdir $files_root
 }
 
 tunnel_remote () {
     # docker-compose doesn't support ~/.ssh/config, so we tunnel to the socket ourselves
+    files_root=$PWD/.dws
+    mkdir -p $files_root
+    ssh_pidfile=$files_root/ssh.pid
+    local_sock=$files_root/docker.sock
+
     # start docker daemon on remote host. TODO: allow external configuration. shm-size is for nvidia specifically...
     ssh $remote_host 'sudo usermod -aG docker $USER && sudo dockerd --default-shm-size=1G --storage-driver=overlay2 &'
+
     # forward the docker daemon's unix socket and point local to it
     ssh -nNT -L $local_sock:/var/run/docker.sock $remote_host &
     echo $! > $ssh_pidfile
@@ -69,17 +82,16 @@ attach_main () {
     if ! [ -z "$remote_host" ]; then
         echo "Connecting to remote docker daemon on $remote_host..."
         tunnel_remote
-        connect
     else
         echo "Connecting to local Docker daemon..."
         unset DOCKER_HOST
-        connect
     fi
+    connect; detach_main  # auto detach after closing terminal
 }
 
 detach_main() {
     echo 'Detaching from previous docker workspace...'
-    mutagen project terminate
+    stop_sync
     kill_tunnel
     unset DOCKER_HOST
     echo 'Detached from previous docker workspace.'
@@ -87,35 +99,34 @@ detach_main() {
 
 stop_main() {
     echo 'Stopping docker workspace...'
-    mutagen project terminate
+    stop_sync
     docker-compose -H=$DOCKER_HOST down
     kill_tunnel
     unset DOCKER_HOST
 }
+
+# Main
 
 if [ $# -lt 1 ]; then
     echo 'Usage: '
     echo '  dws attach [ssh_host]'
     echo '  dws detach'
     echo '  dws stop'
-elif [ ! -f docker-compose.yml ]; then
-    echo 'ERROR: Are you in the correct directory? Project root must have docker-compose.yml!'
+    return 128
+fi
+
+docker-compose config >/dev/null
+if [ ! "$?" = 0 ]; then return 1; fi
+
+remote_host=; [ -z "$2" ] || remote_host=$2
+docker_service_name=$(grep -A3 'services:' docker-compose.yml | head -2 | tail -1 | cut -d : -f 1 | awk '{print $1}')
+
+if [ "$1" = "attach" ]; then
+    attach_main
+elif [ "$1" = "detach" ]; then
+    detach_main
+elif [ "$1" = "stop" ]; then
+    stop_main
 else
-    remote_host=; [ -z "$2" ] || remote_host=$2
-
-    docker_service_name=$(grep -A3 'services:' docker-compose.yml | head -2 | tail -1 | cut -d : -f 1 | awk '{print $1}')
-    files_root=/usr/local/var/dws
-    mkdir -p $files_root
-    ssh_pidfile=$files_root/ssh.pid
-    local_sock=$files_root/docker.sock
-
-    if [ "$1" = "attach" ]; then
-        attach_main
-    elif [ "$1" = "detach" ]; then
-        detach_main
-    elif [ "$1" = "stop" ]; then
-        stop_main
-    else
-        echo "ERROR: Invalid option: $1"
-    fi
+    echo "ERROR: Invalid option: $1"
 fi
