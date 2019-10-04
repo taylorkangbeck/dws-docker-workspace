@@ -1,15 +1,9 @@
 # Purpose
 
-`dws` is a very simple tool for running containerized Python projects in the cloud. It stands for Docker WorkSpace.
-
-With a simple command, you can continuously sync local project code to and from a custom docker container in an IDE-agnostic way.
-
-(WIP - Sorry in advance for the stdout vomit!)
+`dws` is a simple tool for developing in Docker containers, both local and remote.
 
 # Getting Started
-## Requirements
-* Need sudo permission on remote host
-### Dependencies
+## Dependencies
 On Local:
 * OpenSSH >= 6.7
 * docker, docker-compose
@@ -21,70 +15,68 @@ On Remote:
 * OpenSSH >= 6.7
 * dockerd
 
-## Setup
-1. After installing dependencies manually and ensuring they are on your PATH, execute `source setup.sh` in the root of this repo. It creates the alias `dws` in your shell and appends it to ~/.bashrc.
+## Other Requirements
+On Remote:
+* Need sudo permission
 
-2. Add the following files to your project root:
-   * Dockerfile
-     * define base Docker image
-   * docker-compose.yml
-     * define container deployment settings
+## Installation
+1. Clone the repo
+2. Ensure all dependencies above are installed correctly and are on your PATH
+3. Execute `bash setup.sh` in the root of the repo (It creates the alias `dws` in your shell and appends it to ~/.bashrc).
+4. Add any remote hosts you intend to access to `~/.ssh/config` with User and IdentityFile defined (This tool doesn't support manually passing in ssh arguments yet).
 
-   Optional for python projects:
-   * environment.yml (Conda)
-     * define environment with project dependencies
-     * activate it in Dockerfile
+## Project Setup
+*See `dws-example-project` for examples.*
+The example provided is targeted for PyTorch deep learning projects.
 
-    See `dws-example-project` for examples.
+Add the following files to your project root:
+* Dockerfile
+  * defines base Docker image
+* docker-compose.yml
+  * defines container deployment settings
+* mutagen.yml
+  * defines Mutagen file syncing configutation
 
-3. Add any remote hosts to your `~/.ssh/config` with User and IdentityFile defined. Currently this tool doesn't support passing these values in as CLI args.
+Optional for python projects:
+* environment.yml (Conda)
+  * define environment with project dependencies
+  * activate it in Dockerfile
 
+# Usage
+Run all `dws` commands from your project's root directory, where your `docker-compose.yml` lives.
 
-# Basic Usage
-Run all `dws` commands from your project's root directory.
-## Spin up docker container and attach shell
+## Commands:
+`dws attach [ssh_hostname]`
+* Connects to the Docker daemon on `ssh_hostname` if provided, otherwise uses your local Docker installation
+* If the Docker daemon doesn't have an image for this project yet, it builds one
+* If a container isn't already running, it starts one
+* Attaches terminal to running container
+* Begins continuously syncing your project directory to the container
+* *On terminal exit (Ctrl-d):*
+  * Stops syncing your project directory
+  * Disconnects from remote docker daemon
+  * Note: Container will continue running
 
-`dws attach`
-   * This command spins up a docker container using your project's Dockerfile, starts a real-time background sync of your project code to the host, and connects to the container's shell.
-   * When you exit the docker shell (ctrl-D), the container will continue running until you stop it. Note that project code will continue to sync as well.
-   * You can only attach to one container/workspace at a time. You'll be automatically detached from the previous container if you attach to a new one.
-   * Note that the first time you use `dws attach` will take a few minutes because Docker will have to build your image on your host. It will be cached for subsequent runs, so you won't have to wait again unless you make changes to Dockerfile (or environment.yml)
-  
-`dws attach <name-of-ssh-host>`
-  * Does the same as `dws attach` but tunnels over SSH to a remote host's docker daemon.
+`dws stop [ssh_hostname]`
+* Stops the associated container
+
+`dws rebuild [ssh_hostname]`
+* Stops container and forces a rebuild of the Docker image before attaching normally
 
 `dws detach`
-  * Stops syncing code to the previous container kills the SSH tunnel if it exists
+* Forces syncing to stop and ssh tunnels to close. Only really needed if you end up in a weird state.
 
-`dws stop`
-  * Detaches and stops the previous container.
-
-## Using docker commands
-The `dws` alias edits the value of the DOCKER_HOST environment variable. This allows you to use the regular `docker` and `docker-compose` CLIs for hands-on management of containers.
-
-
-# dws-example-project
-The example provided is targeted PyTorch deep learning projects.
-## Docker Container
-The default docker image is Ubuntu with Nvidia CUDA support and PyTorch. The Dockerfile is minimal, installing the template's dependencies and exposing ports, while delegating environment dependencies to Conda.
-
-## Conda Environment
-All dependencies should be managed with Conda via the environment.yml file. For most cases, this means that environment.yml will be the single source of truth for environment configuration.
-
-## Cloud Deployment
-TODO: automatically provision a host through a configured cloud provider
 
 # Troubleshooting
+* First try running `dws detach` to refresh your project's state.
 * Won't connect to remote:
   * Is dockerd installed?
   * Was an instance of docker already running?
     * ssh into the remote host and run `sudo systemctl stop docker`
-* ERROR: `Cannot kill container: unknown error after kill: runc did not terminate sucessfully: container_linux.go:388: signaling init process caused "permission denied" : unknown`
+* `ERROR: Cannot kill container: unknown error after kill: runc did not terminate sucessfully: container_linux.go:388: signaling init process caused "permission denied" : unknown`
   * If docker was installed via snap (like on a remote ubuntu server), you may have conflicting AppArmor profiles.
     * SSH into the server and run `sudo aa-remove-unknown`  (from https://stackoverflow.com/q/47223280)
-* ERROR: Couldn't connect to Docker daemon. You might need to start Docker for Mac.
-  * If you're connecting to a remote server, this error is misleading. It's actually having trouble connecting to the ssh-tunneled docker.sock file. Try deleting it from /usr/local/var/dws/docker.sock and rerunning dws attach
-* ERROR: Cannot start service: driver failed programming external connectivity on endpoint: Bind for 0.0.0.0:8888 failed: port is already allocated
+* `ERROR: Cannot start service: driver failed programming external connectivity on endpoint: Bind for 0.0.0.0:8888 failed: port is already allocated`
   * You already have a container that is bound to that local port (eg 8888). You either need to change your docker-compose.yml or stop the other container manually. Make sure you stop containers before changing your docker-compose.yml
 * Hangs after "Building <project>..."
   * It may just be taking a while to upload large files. How big is your Docker build context? Do you have any large files? They could be in a hidden folder like .git
