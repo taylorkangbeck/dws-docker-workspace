@@ -1,21 +1,17 @@
 version: '3'
 services:
     dws-example-project:  # Will always attach to first service defined
-        image: ml-project-base:latest
+        image: dws-example-project: latest
         build: .
         ports:
             - "8888:8888"  # jupyter default
-            - "6006:6006"  # tensorboard default
-            - "5009:5009"  # aif server default
-        working_dir: /home/${USER}
+        working_dir: /root/
         stdin_open: true
         tty: true
         command: /bin/bash
-        volumes:  # persistent storage dirs in container
-          - datavolume:/home/${USER}/data
-          - modelsvolume:/home/${USER}/models
+        volumes:  # home directory persisted in volume
+          - homevolume:/root/
 volumes:
-    datavolume: {}
-    modelsvolume: {}
+    homevolume: {}
 
 

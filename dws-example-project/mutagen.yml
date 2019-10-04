@@ -1,0 +1,10 @@
+# Configuration for syncing code with Mutagen (https://mutagen.io/documentation/orchestration/)
+sync:
+  defaults:
+    mode: "one-way-safe"
+  dwsExampleProject:  # only supports one project. no non-alphanumeric chars
+   alpha: "."
+   beta: "docker://08dd647e6226ec16455d7ccf9bbbcc0a96753ae533d2aac5b66ffe05ee5fe418/~/dws-example-project"
+   maxStagingFileSize: "1 GB"
+   configurationBeta:
+     stageMode: "neighboring"

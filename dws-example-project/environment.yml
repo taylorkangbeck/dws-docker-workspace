@@ -1,10 +1,4 @@
 name: dws-example-project
-channels:
- - pytorch
 dependencies:
   - python=3.6
   - pip
-  - magma-cuda100
-  - pip:
-    - torch
-    - ipython

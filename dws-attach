@@ -21,8 +21,18 @@ start_container () {
 }
 
 start_sync () {
-    container=$(docker-compose -H=$DOCKER_HOST ps -q $docker_service_name)
-    mutagen sync create --name=$mutagen_project_name $(pwd) docker://$container/~/src/$docker_service_name  # maybe get dirname instead?
+    # Get container from docker-compose
+    cur_container=$(docker-compose -H=$DOCKER_HOST ps -q $docker_service_name)
+    # Parsing current container id from mutagen.yml
+    prev_mutagen_container=$(yq d mutagen.yml sync.defaults | yq r - "sync.*.*" | grep docker:// | yq r - "[0]" | awk -F"//" '{print $2}' | awk -F"/" '{print $1}')
+    # Writing new container id to mutagen.yml. Note: this replaces all occurences of previous container id
+    if [ -z "$prev_mutagen_container" ]; then
+        echo "ERROR: mutagen.yml file docker:// definition invalid. Must at least have placeholder for container id."
+        exit 1
+    fi
+
+    sed -i '' "s/$prev_mutagen_container/$cur_container/g" mutagen.yml  # be careful... not sanitizing input
+    mutagen project start
 }
 
 connect () {
@@ -69,7 +79,7 @@ attach_main () {
 
 detach_main() {
     echo 'Detaching from previous docker workspace...'
-    mutagen sync terminate $mutagen_project_name
+    mutagen project terminate
     kill_tunnel
     unset DOCKER_HOST
     echo 'Detached from previous docker workspace.'
@@ -77,7 +87,7 @@ detach_main() {
 
 stop_main() {
     echo 'Stopping docker workspace...'
-    mutagen sync terminate $mutagen_project_name
+    mutagen project terminate
     docker-compose -H=$DOCKER_HOST down
     kill_tunnel
     unset DOCKER_HOST
@@ -94,9 +104,6 @@ else
     remote_host=; [ -z "$2" ] || remote_host=$2
 
     docker_service_name=$(grep -A3 'services:' docker-compose.yml | head -2 | tail -1 | cut -d : -f 1 | awk '{print $1}')
-    # mutagen doesn't accept dashes, underscores
-    mutagen_project_name=$(echo "$docker_service_name" | sed "s/[^[:alnum:]]//g") 
-
     files_root=/usr/local/var/dws
     mkdir -p $files_root
     ssh_pidfile=$files_root/ssh.pid
