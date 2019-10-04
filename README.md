@@ -22,7 +22,7 @@ On Remote:
 ## Installation
 1. Clone the repo
 2. Ensure all dependencies above are installed correctly and are on your PATH
-3. Execute `bash setup.sh` in the root of the repo (It creates the alias `dws` in your shell and appends it to ~/.bashrc).
+3. Execute `source setup.sh` in the root of the repo (It creates the alias `dws` in your shell and appends it to ~/.bashrc).
 4. Add any remote hosts you intend to access to `~/.ssh/config` with User and IdentityFile defined (This tool doesn't support manually passing in ssh arguments yet).
 
 ## Project Setup
