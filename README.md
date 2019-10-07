@@ -63,8 +63,13 @@ Run all `dws` commands from your project's root directory, where your `docker-co
 `dws rebuild [ssh_hostname]`
 * Stops container and forces a rebuild of the Docker image before attaching normally
 
+`dws connect [ssh_hostname]`
+* Connects to the remote host's docker daemon, but does not attach to container. Allows use of docker CLI to control remote host.
+
 `dws detach`
-* Forces syncing to stop and ssh tunnels to close. Only really needed if you end up in a weird state.
+* Forces syncing to stop and ssh tunnels to close.
+
+
 
 
 # Troubleshooting

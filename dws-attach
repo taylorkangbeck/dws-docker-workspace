@@ -132,6 +132,8 @@ if [ $# -lt 1 ]; then
     echo "  > Forces docker to rebuild the image, then starts a container and attaches to it."
     echo '  dws detach'
     echo "  > Cleanly detaches from the previous workspace. Good for resetting state when an attach command is interrupted."
+    echo '  dws connect [ssh_host]'
+    echo "  > Connects to the remote host's docker daemon if provided, otherwise connects to the local daemon. Does not attach to container. Allows use of docker CLI to control remote host."
     return 128
 fi
 
@@ -150,6 +152,8 @@ elif [ "$1" = "rebuild" ]; then
     rebuild_main
 elif [ "$1" = "detach" ]; then
     detach
+elif [ "$1" = "connect" ]; then
+    connect
 else
     echo "ERROR: Invalid option: $1"
 fi
